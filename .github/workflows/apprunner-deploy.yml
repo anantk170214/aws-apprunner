@@ -12,8 +12,8 @@ permissions:
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-  APP_RUNNER_SERVICE_NAME: ${{ secrets.APP_RUNNER_SERVICE_NAME }}
-  APP_RUNNER_INSTANCE_ROLE_ARN: ${{ secrets.APP_RUNNER_INSTANCE_ROLE_ARN }}
+  # APP_RUNNER_SERVICE_NAME: ${{ secrets.APP_RUNNER_SERVICE_NAME }}
+  # APP_RUNNER_INSTANCE_ROLE_ARN: ${{ secrets.APP_RUNNER_INSTANCE_ROLE_ARN }}
   IMAGE_TAG: ${{ github.sha }} # use commit SHA as image tag
   PORT: 8080
 
@@ -51,68 +51,68 @@ jobs:
           docker tag "${ECR_REPOSITORY}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-      - name: Create or update App Runner service
-        id: apprunner
-        run: |
-          set -euo pipefail
-          SERVICE_NAME="${APP_RUNNER_SERVICE_NAME}"
-          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+      # - name: Create or update App Runner service
+      #   id: apprunner
+      #   run: |
+      #     set -euo pipefail
+      #     SERVICE_NAME="${APP_RUNNER_SERVICE_NAME}"
+      #     IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-          # JSON blob for ImageConfiguration (port + optional env vars)
-          IMAGE_CONFIG=$(jq -n --arg port "${PORT}" '
-            { Port: $port
-            }')
+      #     # JSON blob for ImageConfiguration (port + optional env vars)
+      #     IMAGE_CONFIG=$(jq -n --arg port "${PORT}" '
+      #       { Port: $port
+      #       }')
 
-          # SourceConfiguration with ImageRepository + auto deployments
-          SRC_CONFIG=$(jq -n --arg image "${IMAGE}" '
-            { ImageRepository: {
-                ImageIdentifier: $image,
-                ImageRepositoryType: "ECR",
-                ImageConfiguration: {}
-              },
-              AutoDeploymentsEnabled: true
-            }')
+      #     # SourceConfiguration with ImageRepository + auto deployments
+      #     SRC_CONFIG=$(jq -n --arg image "${IMAGE}" '
+      #       { ImageRepository: {
+      #           ImageIdentifier: $image,
+      #           ImageRepositoryType: "ECR",
+      #           ImageConfiguration: {}
+      #         },
+      #         AutoDeploymentsEnabled: true
+      #       }')
 
-          # Does service exist?
-          EXISTS=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn" --output text)
-          if [ -z "$EXISTS" ]; then
-            echo "Creating App Runner service: ${SERVICE_NAME}"
-            aws apprunner create-service \
-              --service-name "${SERVICE_NAME}" \
-              --source-configuration "${SRC_CONFIG}" \
-              --instance-configuration "{\"InstanceRoleArn\":\"${APP_RUNNER_INSTANCE_ROLE_ARN}\"}" \
-              --region "${AWS_REGION}" \
-              >/tmp/create-out.json
+      #     # Does service exist?
+      #     EXISTS=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn" --output text)
+      #     if [ -z "$EXISTS" ]; then
+      #       echo "Creating App Runner service: ${SERVICE_NAME}"
+      #       aws apprunner create-service \
+      #         --service-name "${SERVICE_NAME}" \
+      #         --source-configuration "${SRC_CONFIG}" \
+      #         --instance-configuration "{\"InstanceRoleArn\":\"${APP_RUNNER_INSTANCE_ROLE_ARN}\"}" \
+      #         --region "${AWS_REGION}" \
+      #         >/tmp/create-out.json
 
-            SERVICE_ARN=$(jq -r '.Service.ServiceArn' /tmp/create-out.json)
-          else
-            echo "Updating App Runner service: ${SERVICE_NAME}"
-            aws apprunner update-service \
-              --service-arn "${EXISTS}" \
-              --source-configuration "${SRC_CONFIG}" \
-              --instance-configuration "{\"InstanceRoleArn\":\"${APP_RUNNER_INSTANCE_ROLE_ARN}\"}" \
-              --region "${AWS_REGION}" \
-              >/tmp/update-out.json
-            SERVICE_ARN="${EXISTS}"
-          fi
+      #       SERVICE_ARN=$(jq -r '.Service.ServiceArn' /tmp/create-out.json)
+      #     else
+      #       echo "Updating App Runner service: ${SERVICE_NAME}"
+      #       aws apprunner update-service \
+      #         --service-arn "${EXISTS}" \
+      #         --source-configuration "${SRC_CONFIG}" \
+      #         --instance-configuration "{\"InstanceRoleArn\":\"${APP_RUNNER_INSTANCE_ROLE_ARN}\"}" \
+      #         --region "${AWS_REGION}" \
+      #         >/tmp/update-out.json
+      #       SERVICE_ARN="${EXISTS}"
+      #     fi
 
-          echo "SERVICE_ARN=${SERVICE_ARN}" >> $GITHUB_ENV
+      #     echo "SERVICE_ARN=${SERVICE_ARN}" >> $GITHUB_ENV
 
-      - name: Wait until service is RUNNING
-        run: |
-          set -euo pipefail
-          for i in {1..60}; do
-            STATUS=$(aws apprunner describe-service --service-arn "${SERVICE_ARN}" --query 'Service.Status' --output text)
-            echo "Status: ${STATUS}"
-            if [ "${STATUS}" = "RUNNING" ]; then
-              break
-            fi
-            sleep 10
-          done
-          URL=$(aws apprunner describe-service --service-arn "${SERVICE_ARN}" --query 'Service.ServiceUrl' --output text)
-          echo "Service URL: ${URL}"
-          echo "APP_RUNNER_URL=${URL}" >> $GITHUB_ENV
+      # - name: Wait until service is RUNNING
+      #   run: |
+      #     set -euo pipefail
+      #     for i in {1..60}; do
+      #       STATUS=$(aws apprunner describe-service --service-arn "${SERVICE_ARN}" --query 'Service.Status' --output text)
+      #       echo "Status: ${STATUS}"
+      #       if [ "${STATUS}" = "RUNNING" ]; then
+      #         break
+      #       fi
+      #       sleep 10
+      #     done
+      #     URL=$(aws apprunner describe-service --service-arn "${SERVICE_ARN}" --query 'Service.ServiceUrl' --output text)
+      #     echo "Service URL: ${URL}"
+      #     echo "APP_RUNNER_URL=${URL}" >> $GITHUB_ENV
 
-      - name: Print service URL
-        run: |
-          echo "Deployed: $APP_RUNNER_URL"
+      # - name: Print service URL
+      #   run: |
+      #     echo "Deployed: $APP_RUNNER_URL"
